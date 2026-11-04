@@ -83,6 +83,7 @@ function makeTile(atlasSize = 512) {
       getTile: vi.fn().mockReturnValue({ coords: { x: 0, y: 0, z: 0 } }),
       reportDrapeGpuBytes,
     },
+    uniforms: { terrainExaggeration: { value: {} } },
   } as unknown as ConstructorParameters<typeof TileMesh>[0];
 
   const meshAdded = {
@@ -416,5 +417,32 @@ describe("TileMesh handle registration", () => {
 
     incoming.dispose(ctx.tileMapByHandle);
     expect(ctx.tileMapByHandle.has(1n)).toBe(false);
+  });
+});
+
+describe("TileMesh shadow mesh", () => {
+  it("casts the terrain's shadow without drawing the surface again", () => {
+    const { tile } = makeTile();
+    // A skirt makes the rendered geometry differ from the terrain-only one.
+    (
+      tile as unknown as {
+        attachShadowMesh: (
+          geometry: BoxGeometry,
+          terrainGeometry: BoxGeometry,
+          castShadow: boolean,
+          receiveShadow: boolean,
+        ) => void;
+      }
+    ).attachShadowMesh(new BoxGeometry(), new BoxGeometry(), true, true);
+
+    const shadowMesh = (
+      tile as unknown as { shadowMesh?: Mesh<BoxGeometry, MeshBasicMaterial> }
+    ).shadowMesh;
+    expect(shadowMesh?.castShadow).toBe(true);
+    expect(shadowMesh?.customDepthMaterial).toBeDefined();
+    // Sharing the tile's material would composite a translucent globe twice.
+    expect(shadowMesh?.material).not.toBe(tile.material);
+    expect(shadowMesh?.material.colorWrite).toBe(false);
+    expect(shadowMesh?.material.depthWrite).toBe(false);
   });
 });

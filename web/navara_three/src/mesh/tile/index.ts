@@ -109,6 +109,15 @@ function compositeAtlasBytes(size: number): number {
   return size * size * 4 * ATLAS_ATTACHMENTS;
 }
 
+/** The shadow mesh's material in color passes, where it writes nothing: the
+ * mesh only casts the terrain's shadow, through `customDepthMaterial`. With
+ * the tile's own material it would draw the surface a second time, which
+ * composites a translucent globe twice. */
+const SHADOW_MESH_COLOR_MATERIAL = new MeshBasicMaterial({
+  colorWrite: false,
+  depthWrite: false,
+});
+
 export class TileMesh
   extends Mesh<BufferGeometry, TileMaterial, CustomObject3DEventMap>
   implements PickableMesh
@@ -725,7 +734,7 @@ export class TileMesh
       if (this.shadowMesh) {
         this.shadowMesh.geometry = terrainGeometry;
       } else {
-        this.shadowMesh = new Mesh(terrainGeometry, this.material);
+        this.shadowMesh = new Mesh(terrainGeometry, SHADOW_MESH_COLOR_MATERIAL);
         this.shadowMesh.customDepthMaterial = this.customDepthMaterial;
         this.add(this.shadowMesh);
       }
@@ -1172,10 +1181,6 @@ ${generateTileCommonInjection(maxTextures)}
       // Create new material with correct type. Per-layer UV uniforms will be
       // re-populated by setupTextures before the next render.
       this.material = this.initMaterial(mat, this.ctx.uniforms, globe);
-
-      if (this.shadowMesh) {
-        this.shadowMesh.material = this.material;
-      }
 
       // Dispose old material
       this.ctx.viewContext?.removeShadowMaterial(oldMaterial);
