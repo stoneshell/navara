@@ -14,26 +14,22 @@ partly.
 
 ## Rendering
 
-### A style without a visible background layer paints the globe opaque black
-
-MapLibre leaves the canvas transparent when no background layer is drawn;
-Navara fills the globe with opaque black (`BackgroundHandler`'s
-`applyDefaultBackground`, documented there as "MapLibre's fallback").
-
-- Affects nearly every GeoJSON case. It also hides black features on top, for
-  example the 50% black fills in `within/*`.
-- Cases: `empty/empty`, `visibility/background/none`, `fill-color/*`,
-  `geojson/*`, `within/*`.
-
-### Only the top-most background layer is used
+### Only the top-most background layer is used, and always at the bottom
 
 Background layers are not composited. The top-most one alone sets the globe
-color.
+color, beneath every other layer regardless of its position in the style.
 
 - `regressions/mapbox-gl-js#3819`: an opacity-0 green background above an
   opaque red one leaves the globe transparent; MapLibre shows red.
-- `combinations/background-translucent--background-translucent`: Navara shows
-  only the upper layer.
+- `combinations/background-translucent--background-translucent`,
+  `combinations/background-opaque--background-translucent`: Navara shows only
+  the upper layer.
+- `projection/globe/background-opacity`, `background-opacity/overlay`: a 50%
+  green background listed after a raster layer should tint the imagery; Navara
+  draws it under the opaque raster, so it has no effect.
+- `combinations/fill-opaque--background-translucent`,
+  `combinations/fill-translucent--background-translucent`: the background
+  listed after the fill should cover it; Navara draws the fill on top.
 
 ### `circle-radius` is applied in meters, so circles vanish at low zoom
 
@@ -59,6 +55,10 @@ No circle appears in any case. The cause is the size unit, not the color.
   `line-color` and are drawn white, invisible over the white background.
 - `fill-extrusion-color/default`: the extrusion sets no color and is drawn
   white.
+- Without a background layer the globe is transparent, so these features
+  vanish against the harness's white backdrop: `line-opacity/default`,
+  `line-gap-width/default`, `fill-opacity/literal`, `filter/none`,
+  `regressions/mapbox-gl-native#8460`.
 
 ### Translucent colors are blended in linear space
 
@@ -69,13 +69,32 @@ No circle appears in any case. The cause is the size unit, not the color.
 - Also visible in `fill-opacity/*`, `line-opacity/*`, `combinations/*`, and
   `regressions/mapbox-gl-native#7714`.
 
-### Draped features inherit a translucent background's opacity
+### Raster tiles are requested at zoom levels the fixture does not ship
 
-- `combinations/background-translucent--fill-opaque`: an opaque blue fill over
-  a 50% red background is `(137, 137, 255)` in Navara and pure blue in
-  MapLibre.
-- Fills and lines appear to be baked into the globe texture, which is then
-  drawn with the background opacity.
+- `background-opacity/zero` and `background-opacity/overlay` (512×256 at z0,
+  a `tileSize: 256` raster source) show no imagery. Navara requests
+  `0-0-0.satellite.png`, which the fixture does not ship (404); the fixture
+  ships the z1 tiles MapLibre loads.
+- `raster-anisotropic-filtering/no-pitch` (z18.6) is blank: the fixture ships
+  only z20 tiles, and every tile Navara requests 404s.
+
+### `zoomed-raster/*` panics in WASM
+
+- `zoomed-raster/fractional`, `/overzoom`, `/underzoom` (a raster source with
+  `minzoom` = `maxzoom` = 17, viewed at z15–z18) log `unreachable` followed by
+  ~1800 `recursive use of an object detected which would lead to unsafe
+aliasing in rust`, and the page never settles.
+
+### color-relief at z11 draws nothing
+
+- `color-relief/rainbow`, `/hillshade`, `/opacity`, `/transparency`, and
+  `visibility/color-relief/visible` (z11, `raster-dem` with `maxzoom: 15`,
+  `tileSize: 256`) show no relief, even over the opaque white background in
+  `visibility/color-relief/visible`. No request fails.
+- `color-relief/low-zoom` and `resampling/color-relief/*` render.
+- `color-relief/custom-encoding-zero-factor` and `-all-zero-factors` fail with
+  `Layer "color-relief": Source "source" not found`: the `encoding: "custom"`
+  source is not added.
 
 ### fill-extrusion ignores opacity and draws above later 2D layers
 
@@ -98,6 +117,9 @@ The extrusions render once the scene has lights, which the harness adds
   lights.
 - `hillshade-*-color` paint properties have no effect (supported.json marks
   the layer ⚠️, "layer only").
+- Hillshade only perturbs the globe's normals and writes no color, so without
+  a background layer (transparent globe) nothing is drawn:
+  `resampling/hillshade/default`.
 - Cases: `hillshade-*/default`, `hillshade-accent-color/terrarium`,
   `hillshade-maxzoom/*`, `resampling/hillshade/default`.
 
@@ -219,6 +241,7 @@ defaults (`center: [0, 0]`, `zoom: 0`).
 - **Vector tile zoom.** Navara picks vector tiles by screen-space error and
   can load a zoom level above MapLibre's. It shows only where every tile has
   the same content: `projection/globe/fill-seams/checkerboard` draws squares
-  half the size.
+  half the size. Raster tiles too: `projection/globe/antimeridian-lod`, whose
+  tiles are colored by zoom, shows a different color.
 - **404s for terrain tiles.** Navara requests `*.terrain.png` tiles MapLibre's
   fixtures do not ship; maplibre-gl-js's test server 404s them too.

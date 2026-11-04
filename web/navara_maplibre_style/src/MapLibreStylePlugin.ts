@@ -173,6 +173,10 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
    * Background layer handler for evaluating and applying background colors.
    */
   private backgroundHandler?: BackgroundHandler;
+  /**
+   * The view's background alpha before init, restored on dispose.
+   */
+  private previousBackgroundAlpha?: number;
 
   /**
    * Create a new MapLibre Style plugin.
@@ -399,6 +403,11 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
 
     // Register fonts from style font-faces
     this.registerFontsFromStyle(view);
+
+    // MapLibre clears the canvas to transparent: undrawn pixels (outside the
+    // globe, or the globe without a background layer) show the page behind it.
+    this.previousBackgroundAlpha = view.backgroundAlpha;
+    view.backgroundAlpha = 0;
 
     // Step 1: Initialize background handler
     this.backgroundHandler = new BackgroundHandler(
@@ -1164,6 +1173,10 @@ export class MapLibreStylePlugin extends Plugin<ThreeView, ViewContext> {
     this.zoomFollowingLayers.clear();
     this.backgroundHandler?.clearCache();
     this.backgroundHandler = undefined;
+    if (this.view && this.previousBackgroundAlpha !== undefined) {
+      this.view.backgroundAlpha = this.previousBackgroundAlpha;
+    }
+    this.previousBackgroundAlpha = undefined;
     this.parsedStyle = null;
     this.view = undefined;
     this.lastZoom = undefined;

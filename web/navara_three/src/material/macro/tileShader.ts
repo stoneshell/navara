@@ -190,7 +190,15 @@ ${watermaskReflectivityFallback}
   vec3  tileEmissiveColor     = (hasWinner && isTexturizedLayer) ? uEmissiveColors[winIdx]      : vec3(0.0);
   float tileEffectIdsMask     = (hasWinner && isTexturizedLayer) ? uEffectIdsMasks[winIdx]      : 0.0;
 
-  diffuseColor.rgb = atlasColor.rgb + diffuseColor.rgb * (1.0 - atlasColor.a);
+  // diffuseColor.a is the globe opacity, which applies to the globe's base
+  // colour only: draped layers keep their own alpha. Composite the atlas over
+  // the translucent base and un-premultiply for straight-alpha blending. With
+  // an opaque globe this reduces to the plain "over" above.
+  float nvr_baseAlpha = diffuseColor.a * (1.0 - atlasColor.a);
+  float nvr_outAlpha = atlasColor.a + nvr_baseAlpha;
+  vec3 nvr_outColor = atlasColor.rgb + diffuseColor.rgb * nvr_baseAlpha;
+  diffuseColor.rgb = nvr_outAlpha > 0.0 ? nvr_outColor / nvr_outAlpha : diffuseColor.rgb;
+  diffuseColor.a = nvr_outAlpha;
   `;
 }
 

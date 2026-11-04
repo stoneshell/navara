@@ -391,9 +391,10 @@ describe("MapLibreStylePlugin", () => {
       const view = createMockView(5);
       await plugin.init(view, mockViewContext);
 
-      // Background layer should not apply (zoom < minzoom)
-      // Opacity should remain at default 1
-      expect(view.globe.opacity).toBe(1);
+      // Background layer should not apply (zoom < minzoom), so the globe is
+      // left transparent like a style without a background
+      expect(view.globe.opacity).toBe(0);
+      expect(view.globe.transparent).toBe(true);
     });
 
     it("should respect maxzoom and skip layers at or above threshold", async () => {
@@ -415,8 +416,10 @@ describe("MapLibreStylePlugin", () => {
       const view = createMockView(10);
       await plugin.init(view, mockViewContext);
 
-      // Background layer should not apply (zoom >= maxzoom)
-      expect(view.globe.opacity).toBe(1);
+      // Background layer should not apply (zoom >= maxzoom), so the globe is
+      // left transparent like a style without a background
+      expect(view.globe.opacity).toBe(0);
+      expect(view.globe.transparent).toBe(true);
     });
 
     it("should apply background layer within minzoom/maxzoom range", async () => {
@@ -745,8 +748,8 @@ describe("MapLibreStylePlugin", () => {
       });
     });
 
-    // BackgroundHandler-specific tests: default background fallback
-    it("should reset to default background when no layer applies", async () => {
+    // BackgroundHandler-specific tests: no-layer and failed-color fallbacks
+    it("should leave the globe transparent when no layer applies", async () => {
       const style: StyleSpecification = {
         version: 8,
         sources: {},
@@ -779,9 +782,35 @@ describe("MapLibreStylePlugin", () => {
       setMockZoom(view, 12);
       moveListener();
 
-      // Should reset to default (#000000, opacity 1.0)
-      expect(view.globe.opacity).toBe(1.0);
-      expect(view.globe.transparent).toBe(false);
+      // MapLibre draws nothing, so the globe is transparent
+      expect(view.globe.opacity).toBe(0);
+      expect(view.globe.transparent).toBe(true);
+    });
+
+    it("should fall back to the default color and keep background-opacity when the color is invalid", async () => {
+      const style: StyleSpecification = {
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "bg",
+            type: "background",
+            paint: {
+              // Unset global state evaluates to null
+              "background-color": ["global-state", "missing"],
+              "background-opacity": 0.5,
+            },
+          },
+        ],
+      } as StyleSpecification;
+
+      const plugin = new MapLibreStylePlugin(style);
+      const view = createMockView();
+      await plugin.init(view, mockViewContext);
+
+      // Default #000000 with the layer's own opacity, as in MapLibre
+      expect(view.globe.opacity).toBe(0.5);
+      expect(view.globe.transparent).toBe(true);
       const color = view.globe.color as unknown as {
         r: number;
         g: number;

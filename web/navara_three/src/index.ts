@@ -1284,6 +1284,22 @@ export default class ThreeView<
   }
 
   /**
+   * Gets the alpha of the background (clear) color.
+   */
+  get backgroundAlpha() {
+    return this._renderer.getClearAlpha();
+  }
+  /**
+   * Sets the alpha of the background (clear) color. `1` (the default) paints
+   * `Options.backgroundColor` behind the scene; `0` leaves undrawn pixels
+   * transparent, so the page behind the canvas shows through.
+   */
+  set backgroundAlpha(v: number) {
+    this._renderer.setClearAlpha(v);
+    this.forceUpdate();
+  }
+
+  /**
    * The resolved tile-cache memory budget in bytes (see `Options.cacheBytes`).
    * `undefined` before `init()` when no explicit option was given.
    */

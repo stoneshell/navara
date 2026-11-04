@@ -121,8 +121,9 @@ export class BackgroundHandler {
 
   /**
    * Apply default background to the view.
-   * Used as fallback when no layer applies or on errors.
-   * Matches MapLibre's fallback: opaque black background.
+   * Last-resort guard when the background evaluators cannot be compiled,
+   * which style validation should already prevent. Not MapLibre behavior:
+   * a failed color evaluation uses the spec default color in `apply`.
    */
   private applyDefaultBackground(view: ThreeView): void {
     // Apply cached default color (typically black #000000)
@@ -130,7 +131,7 @@ export class BackgroundHandler {
     // Clone the cached color to avoid shared mutable state
     view.globe.color = this.defaultColor.color.clone();
 
-    // MapLibre's fallback background is always fully opaque
+    // Error fallback is always fully opaque
     view.globe.opacity = 1.0;
     view.globe.transparent = false;
   }
@@ -157,9 +158,10 @@ export class BackgroundHandler {
       break;
     }
 
-    // If no background layer applies, reset to MapLibre's default background (#000000)
+    // If no background layer applies, leave the globe transparent (matching MapLibre)
     if (!backgroundLayer) {
-      this.applyDefaultBackground(view);
+      view.globe.opacity = 0;
+      view.globe.transparent = true;
       return;
     }
 
@@ -216,8 +218,7 @@ export class BackgroundHandler {
     }
 
     // Evaluate background-color using cached evaluator
-    let colorAlpha = 1.0;
-    let colorSet = false;
+    let colorResult: { color: Color; alpha: number } | undefined;
     try {
       const colorValue = this.cache.colorEvaluator({
         properties: undefined,
@@ -225,23 +226,20 @@ export class BackgroundHandler {
       });
 
       // Convert to Navara Color and extract alpha using helper
-      const colorResult = toNavaraColor(colorValue);
-      if (colorResult) {
-        // Assign the evaluated color directly
-        // Note: view.globe.color is a getter/setter, so we must assign rather than modify
-        view.globe.color = colorResult.color;
-        colorAlpha = colorResult.alpha;
-        colorSet = true;
-      }
+      colorResult = toNavaraColor(colorValue) ?? undefined;
     } catch (err) {
       console.warn("Failed to evaluate background-color", err);
     }
 
-    // If color evaluation/parsing failed, apply default background and stop
-    if (!colorSet) {
-      this.applyDefaultBackground(view);
-      return;
-    }
+    // Like MapLibre, a failed color falls back to the spec default for this
+    // property only; background-opacity still applies below.
+    colorResult ??= {
+      color: this.defaultColor.color.clone(),
+      alpha: this.defaultColor.alpha,
+    };
+    // Note: view.globe.color is a getter/setter, so we must assign rather than modify
+    view.globe.color = colorResult.color;
+    const colorAlpha = colorResult.alpha;
 
     // Evaluate background-opacity using cached evaluator
     let explicitOpacity: number | undefined;

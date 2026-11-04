@@ -70,9 +70,15 @@ describe("generateTileMapFragment", () => {
   it("uses premultiplied 'over' blend so transparent atlas keeps base color", () => {
     // src.rgb + dst * (1 - src.a) — NOT mix(dst, src.rgb, src.a). Mixing
     // would double-apply alpha because the composite already premultiplies.
+    // The globe opacity (diffuseColor.a) scales only the base, so draped
+    // layers keep their own alpha.
     expect(src).toContain(
-      "diffuseColor.rgb = atlasColor.rgb + diffuseColor.rgb * (1.0 - atlasColor.a);",
+      "float nvr_baseAlpha = diffuseColor.a * (1.0 - atlasColor.a);",
     );
+    expect(src).toContain(
+      "vec3 nvr_outColor = atlasColor.rgb + diffuseColor.rgb * nvr_baseAlpha;",
+    );
+    expect(src).toContain("diffuseColor.a = nvr_outAlpha;");
     expect(src).not.toMatch(/mix\(diffuseColor\.rgb,\s*atlasColor\.rgb/);
   });
 
